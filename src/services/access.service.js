@@ -14,6 +14,7 @@ const {
 const { findByEmail } = require("./user.service");
 const { log } = require("console");
 const keytokenModel = require("../models/keytoken.model");
+const { ObjectId } = require("mongoose").Types;
 
 const RoleUser = {
   ADMIN: "ADMIN",
@@ -28,7 +29,6 @@ class AccessService {
     const foundToken = await KeyTokenService.findByRefreshTokenUsed(
       refreshToken
     );
-
     if (foundToken) {
       // decode xem may la thang nao?
       const { userId, email } = await verifyJWT(
@@ -36,8 +36,8 @@ class AccessService {
         foundToken.privateKey
       );
       // xoa token use di
-      await KeyTokenService.deleteKeyById({ userId });
-      throw new FobiddenError("Something wrong happend!! Please Relogin");
+      await KeyTokenService.deleteKeyById(userId);
+      throw new FobiddenError("Đã xảy ra lỗi, vui lòng đăng nhập lại!");
     }
 
     // chua co
@@ -99,12 +99,12 @@ class AccessService {
     // 1
     const userFound = await findByEmail({ email });
     if (!userFound) {
-      throw new BadRequestError("Shop not registered");
+      throw new BadRequestError("Tài khoản không tồn tại!");
     }
 
     // 2
-    const match = bcrypt.compare(password, userFound.password);
-    if (!match) throw new AuthFailureError("Authentication error");
+    const match = await bcrypt.compare(password, userFound.password);
+    if (!match) throw new AuthFailureError("Mật khẩu không chính xác!");
 
     // 3
     const privateKey = crypto.randomBytes(64).toString("hex");
@@ -161,7 +161,7 @@ class AccessService {
       });
 
       if (!keyStore) {
-        throw new BadRequestError("Keystore Error!");
+        throw new BadRequestError("keyStore Error!");
       }
 
       //create tokens pair
