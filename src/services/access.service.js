@@ -12,7 +12,6 @@ const {
   AuthFailureError,
 } = require("../core/error.response");
 const { findByEmail } = require("./user.service");
-const { log } = require("console");
 const keytokenModel = require("../models/keytoken.model");
 const { ObjectId } = require("mongoose").Types;
 
@@ -22,6 +21,45 @@ const RoleUser = {
 };
 
 class AccessService {
+  
+  static handleRefreshTokenV2 = async ({keyStore, user, refreshToken}) => {
+
+    const {userId, email} = user;
+    
+    if(keyStore.refreshTokenUsed.includes(refreshToken)){
+      await KeyTokenService.deleteKeyById(userId);
+      throw new FobiddenError("Đã xảy ra lỗi, vui lòng đăng nhập lại!");
+    }
+    
+    if(keyStore.refreshToken !== refreshToken){
+      throw new AuthFailureError("User not registered");
+    }
+
+    const foundUser = await findByEmail({ email });
+    if (!foundUser) throw new AuthFailureError("User not registered");
+
+    // create 1 cap token moi
+    const tokens = await createTokenPair(
+      { userId, email },
+      keyStore.publicKey,
+      keyStore.privateKey
+    );
+    await keytokenModel.updateOne(
+      { refreshToken: refreshToken },
+      {
+        $set: {
+          refreshToken: tokens.refreshToken,
+        },
+        $addToSet: {
+          refreshTokenUsed: refreshToken,
+        },
+      }
+    );
+    return {
+      user,
+      tokens,
+    };
+  };
   static handleRefreshToken = async (refreshToken) => {
     /*
       Check token Used
